@@ -1,0 +1,64 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type User {
+  _id: ID!
+  username: String!
+  email: String!
+  password: String!
+}
+
+type LoginUserResponse {
+  token: String!
+  user: User!
+}
+
+type Event {
+  _id: ID!
+  title: String!
+  description: String!
+  location: String!
+  startDate: String!
+  endDate: String!
+  organizer: String
+  participants: [String!]
+}
+
+type Query {
+  users: [User!]!
+  events: [Event!]!
+  event(id: String!): Event!
+}
+
+type Mutation {
+  """Create a user """
+  createUser(createUserInput: CreateUserInput!): User!
+
+  """Login a user and return JWT and user data"""
+  loginUser(loginUserInput: LoginUserInput!): LoginUserResponse!
+  createEvent(createEventInput: CreateEventInput!): Event!
+  removeEvent(id: String!): Event!
+}
+
+input CreateUserInput {
+  username: String!
+  email: String!
+  password: String!
+}
+
+input LoginUserInput {
+  username: String
+  email: String
+  password: String!
+}
+
+input CreateEventInput {
+  title: String!
+  description: String!
+  location: String!
+  startDate: String!
+  endDate: String!
+  organizer: String
+  participants: [String!]
+}

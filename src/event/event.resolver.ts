@@ -2,6 +2,7 @@ import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { EventService } from './event.service';
 import { Event } from './entities/event.entity';
 import { CreateEventInput } from './dto/create-event.input';
+import { UpdateEventInput } from './dto/update-event.input';
 
 @Resolver(() => Event)
 export class EventResolver {
@@ -29,6 +30,31 @@ export class EventResolver {
   })
   findOne(@Args('id') id: string): Promise<Event> {
     return this.eventService.findOne(id);
+  }
+
+  @Mutation(() => Event)
+  async removeParticipants(
+    @Args('id') id: string,
+    @Args('removeParticipantsInput', { type: () => [String] })
+    removeParticipantsDto: string[],
+  ): Promise<Event> {
+    try {
+      return this.eventService.removeParticipants(id, removeParticipantsDto);
+    } catch (err) {
+      throw new Error('error');
+    }
+  }
+
+  @Mutation(() => Event)
+  async updateEvent(
+    @Args('updateEventInput') updateEventInput: UpdateEventInput,
+    @Args('id') id: string,
+  ): Promise<Event> {
+    try {
+      return this.eventService.updateEvent(updateEventInput, id);
+    } catch (err) {
+      throw new Error('Error ');
+    }
   }
 
   // @Query(() => Event, { name: 'event' })

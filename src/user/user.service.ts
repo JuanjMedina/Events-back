@@ -1,12 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserInput } from './dto/create-user.input';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, userDocument } from './entities/user.entity';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
-import { LoginUserInput } from './dto/login-user.input';
-import { randomUUID } from 'crypto';
+import { UpdateUserInput } from './dto/update-user.input';
 
 @Injectable()
 export class UserService {
@@ -25,7 +28,21 @@ export class UserService {
     return createdUser.save();
   }
 
-  async findAll() {
+  async findById(id: string): Promise<User> {
+    try {
+      const userSearch = await this.userModel.findById({ _id: id });
+      if (!userSearch)
+        throw new HttpException('User not found ', HttpStatus.FORBIDDEN);
+      return userSearch;
+    } catch (Err) {
+      throw new HttpException(
+        'Internal server error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async findAll(): Promise<User[]> {
     return await this.userModel.find().exec();
   }
 
@@ -46,28 +63,6 @@ export class UserService {
     }
   }
 
-  async validateUser(loginUserInput: LoginUserInput): Promise<User> {
-    const { password, email, username } = loginUserInput;
-    const userByUsername = await this.findBy({
-      key: 'username',
-      value: username,
-    });
-
-    const userByEmail = await this.findBy({
-      key: 'email',
-      value: email,
-    });
-
-    if (userByEmail) {
-      const match = await bcrypt.compare(password, userByEmail.password);
-      if (match) return userByEmail;
-    }
-    if (userByUsername) {
-      const match = await bcrypt.compare(password, userByUsername.password);
-      if (match) return userByUsername;
-    }
-  }
-
   async searchUserByName(username: string[]): Promise<string[]> {
     const users: string[] = [];
     for (const value of username) {
@@ -81,13 +76,55 @@ export class UserService {
     return users;
   }
 
-  async generateJWT(user: User): Promise<string> {
-    const payload = {
-      ...user,
-      random: randomUUID(),
-    };
-    return jwt.sign(payload, process.env.SECRET_JWT, {
-      expiresIn: '1h',
-    });
+  async hashedPassword(password: string, interval: number) {
+    try {
+      return await bcrypt.hash(password, interval);
+    } catch (err) {
+      console.error('Error hashing password:', err);
+      throw err;
+    }
+  }
+
+  async updateUser(updateUserInput: UpdateUserInput, id: string) {
+    try {
+      const updateData = updateUserInput;
+      const { password } = updateData;
+
+      if (password && password.length > 0) {
+        updateData.password = await this.hashedPassword(
+          updateData.password,
+          10,
+        );
+      }
+      if (!isValidObjectId(id)) {
+        throw new NotFoundException('Invalid user id ');
+      }
+      const user = await this.userModel.findByIdAndUpdate(
+        { _id: id },
+        updateData,
+        { new: true },
+      );
+
+      if (!user) {
+        throw new NotFoundException('Usuario no encontrado');
+      }
+
+      return user;
+    } catch (err) {
+      console.error('Error al actualizar el usuario:', err.message);
+      throw err;
+    }
+  }
+
+  async deleteUser(idUser: string): Promise<User> {
+    try {
+      const user = await this.userModel.findByIdAndDelete({ _id: idUser });
+      if (!user) {
+        throw new NotFoundException('Usuario no encontrado');
+      }
+      return user;
+    } catch (err) {
+      throw err;
+    }
   }
 }

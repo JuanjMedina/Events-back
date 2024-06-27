@@ -7,11 +7,14 @@ type User {
   username: String!
   email: String!
   password: String!
+  roles: [UserRoles!]!
 }
 
-type LoginUserResponse {
-  token: String!
-  user: User!
+enum UserRoles {
+  SUPPORT
+  ADMIN
+  CREATOR
+  USER
 }
 
 type Event {
@@ -25,20 +28,34 @@ type Event {
   participants: [String!]
 }
 
+type LoginUserResponse {
+  token: String!
+  user: User!
+}
+
 type Query {
   users: [User!]!
   events: [Event!]!
   event(id: String!): Event!
+  example: String!
 }
 
 type Mutation {
   """Create a user """
   createUser(createUserInput: CreateUserInput!): User!
 
-  """Login a user and return JWT and user data"""
-  loginUser(loginUserInput: LoginUserInput!): LoginUserResponse!
+  """Update user """
+  updateUser(idUser: String!, updatedUser: UpdateUserInput!): User!
+
+  """Delete User """
+  deleteUser(idUser: String!): User!
   createEvent(createEventInput: CreateEventInput!): Event!
   removeEvent(id: String!): Event!
+  removeParticipants(id: String!, removeParticipantsInput: [String!]!): Event!
+  updateEvent(updateEventInput: UpdateEventInput!, id: String!): Event!
+
+  """Login a user and return JWT and user data"""
+  loginUser(loginUserInput: LoginUserInput!): LoginUserResponse!
 }
 
 input CreateUserInput {
@@ -47,10 +64,10 @@ input CreateUserInput {
   password: String!
 }
 
-input LoginUserInput {
+input UpdateUserInput {
   username: String
   email: String
-  password: String!
+  password: String
 }
 
 input CreateEventInput {
@@ -61,4 +78,20 @@ input CreateEventInput {
   endDate: String!
   organizer: String
   participants: [String!]
+}
+
+input UpdateEventInput {
+  title: String
+  description: String
+  location: String
+  startDate: String
+  endDate: String
+  organizer: String
+  participants: [String!]
+}
+
+input LoginUserInput {
+  username: String
+  email: String
+  password: String!
 }

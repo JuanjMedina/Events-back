@@ -1,7 +1,9 @@
 import {
-  HttpException,
-  HttpStatus,
+  BadRequestException,
+  ConflictException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateUserInput } from './dto/create-user.input';
@@ -18,32 +20,69 @@ export class UserService {
   ) {}
 
   async create(createUserInput: CreateUserInput): Promise<User> {
-    const { username, email, password } = createUserInput;
-    const hashPassword = await bcrypt.hash(password, 10);
-    const createdUser = new this.userModel({
-      username,
-      email,
-      password: hashPassword,
-    });
-    return createdUser.save();
+    try {
+      if (!createUserInput) throw new BadRequestException('Incomplete data');
+
+      const { username, email, password } = createUserInput;
+      const hashPassword = await bcrypt.hash(password, 10);
+
+      const createdUser = new this.userModel({
+        username,
+        email,
+        password: hashPassword,
+      });
+
+      if (!createdUser) {
+        throw new BadRequestException('Invalid data');
+      }
+
+      return await createdUser.save();
+    } catch (err) {
+      if (err.code === 11000) {
+        if (err.keyPattern && err.keyPattern.username) {
+          throw new ConflictException(
+            `Username ${createUserInput.username} is already in use.`,
+          );
+        }
+      } else if (err instanceof BadRequestException) {
+        throw err;
+      } else {
+        Logger.error('Error creating user', err.stack);
+        throw new InternalServerErrorException('Internal server error');
+      }
+    }
   }
 
   async findById(id: string): Promise<User> {
     try {
+      if (!isValidObjectId(id)) throw new BadRequestException('Invalid ID');
+
       const userSearch = await this.userModel.findById({ _id: id });
-      if (!userSearch)
-        throw new HttpException('User not found ', HttpStatus.FORBIDDEN);
+      if (!userSearch) throw new NotFoundException('User not found');
+
       return userSearch;
-    } catch (Err) {
-      throw new HttpException(
-        'Internal server error',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    } catch (err) {
+      if (
+        err instanceof BadRequestException ||
+        err instanceof NotFoundException
+      ) {
+        throw err;
+      } else if (err.name === 'CastError' && err.kind === 'ObjectId') {
+        throw new BadRequestException('Invalid ID');
+      } else {
+        Logger.error('Error searching for user', err.stack);
+        throw new InternalServerErrorException('Internal server error');
+      }
     }
   }
 
   async findAll(): Promise<User[]> {
-    return await this.userModel.find().exec();
+    try {
+      return await this.userModel.find();
+    } catch (err) {
+      Logger.error('Error retrieving users', err.stack);
+      throw new InternalServerErrorException('Internal server error');
+    }
   }
 
   public async findBy({
@@ -54,26 +93,41 @@ export class UserService {
     value: any;
   }): Promise<User> {
     try {
-      const user = this.userModel.findOne({
-        [key]: value,
-      });
+      const user = await this.userModel.findOne({ [key]: value });
+      if (!user)
+        throw new NotFoundException(
+          'A user with the specified credentials was not found.',
+        );
       return user;
     } catch (err) {
-      throw new Error('Error consultando en la BD ');
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+      Logger.error('Error searching the database', err.stack);
+      throw new InternalServerErrorException('Internal server error');
     }
   }
 
   async searchUserByName(username: string[]): Promise<string[]> {
-    const users: string[] = [];
-    for (const value of username) {
-      const user = await this.userModel.findOne({
-        username: value,
-      });
-      if (user) {
+    try {
+      const users: string[] = [];
+      for (const value of username) {
+        const user = await this.userModel.findOne({
+          username: value,
+        });
+
+        if (!user) throw new NotFoundException(`Username ${value} not found`);
+
         users.push(user._id);
       }
+      return users;
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+      Logger.error('Error searching the database', err.stack);
+      throw new InternalServerErrorException('Internal server error');
     }
-    return users;
   }
 
   async hashedPassword(password: string, interval: number) {
@@ -89,6 +143,7 @@ export class UserService {
     try {
       const updateData = updateUserInput;
       const { password } = updateData;
+      if (!updateData) throw new BadRequestException('Incomplete data');
 
       if (password && password.length > 0) {
         updateData.password = await this.hashedPassword(
@@ -97,7 +152,7 @@ export class UserService {
         );
       }
       if (!isValidObjectId(id)) {
-        throw new NotFoundException('Invalid user id ');
+        throw new BadRequestException('Invalid user ID');
       }
       const user = await this.userModel.findByIdAndUpdate(
         { _id: id },
@@ -106,13 +161,19 @@ export class UserService {
       );
 
       if (!user) {
-        throw new NotFoundException('Usuario no encontrado');
+        throw new NotFoundException('User not found');
       }
 
       return user;
     } catch (err) {
-      console.error('Error al actualizar el usuario:', err.message);
-      throw err;
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      Logger.error('Error updating user', err.stack);
+      throw new InternalServerErrorException('Internal server error');
     }
   }
 
@@ -120,11 +181,16 @@ export class UserService {
     try {
       const user = await this.userModel.findByIdAndDelete({ _id: idUser });
       if (!user) {
-        throw new NotFoundException('Usuario no encontrado');
+        throw new NotFoundException('User not found');
       }
       return user;
     } catch (err) {
-      throw err;
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
+      Logger.error('Error deleting user', err.stack);
+      throw new InternalServerErrorException('Internal server error');
     }
   }
 }

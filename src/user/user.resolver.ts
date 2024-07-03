@@ -25,13 +25,18 @@ export class UserResolver {
   }
 
   @Mutation(() => User, {
-    description: 'Update user ',
+    description: 'updateUser',
   })
   updateUser(
     @Args('idUser') idUser: string,
     @Args('updatedUser') updatedUserInput: UpdateUserInput,
   ) {
     return this.userService.updateUser(updatedUserInput, idUser);
+  }
+
+  @Query(() => User, { name: 'findUser' })
+  findUserById(@Args('idUser') idUser: string) {
+    return this.userService.findById(idUser);
   }
 
   @Mutation(() => User, {
